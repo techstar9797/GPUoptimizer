@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backfill dashboard</title>
+  <meta name="description" content="An agent harness that rewrites itself to schedule 6,212 production GPUs, measured against the published state of the art.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="dash.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <h1>Backfill</h1>
+      <p>An agent harness that rewrites itself to schedule 6,212 production GPUs</p>
+    </div>
+    <div class="status" id="status" role="status" aria-live="polite">Loading…</div>
+  </header>
+
+  <main>
+    <section class="kpis" aria-label="Key results">
+      <div class="kpi hero">
+        <span class="k-label">GPUs left idle, agent's best policy</span>
+        <span class="k-value" id="k-best">–</span>
+        <span class="k-sub" id="k-best-sub"></span>
+      </div>
+      <div class="kpi">
+        <span class="k-label">Harness versions</span>
+        <span class="k-value" id="k-versions">–</span>
+        <span class="k-sub" id="k-versions-sub"></span>
+      </div>
+      <div class="kpi">
+        <span class="k-label">Policies written by the agent</span>
+        <span class="k-value" id="k-policies">–</span>
+        <span class="k-sub" id="k-policies-sub"></span>
+      </div>
+      <div class="kpi">
+        <span class="k-label">Atlas memory recalls</span>
+        <span class="k-value" id="k-memory">–</span>
+        <span class="k-sub" id="k-memory-sub"></span>
+      </div>
+    </section>
+
+    <section class="pipeline" aria-label="What happens in each generation">
+      <ol id="steps"></ol>
+      <p class="raindrop" id="raindrop"></p>
+    </section>
+
+    <section class="row">
+      <figure class="card wide">
+        <figcaption><b>Getting better each generation</b><span>GPUs left idle, mean of 4 production workloads. Lower is better.</span></figcaption>
+        <div id="progress" class="chart"></div>
+      </figure>
+      <section class="card">
+        <h2><b>Which policy wins on which workload</b><span>GPUs left idle. Lower wins.</span></h2>
+        <div class="table-wrap"><table id="wins"></table></div>
+        <p class="foot">Provider examples are illustrative, based on public positioning, not provider data. Held-out workloads were never shown to the agent.</p>
+      </section>
+    </section>
+
+    <section class="row">
+      <figure class="card">
+        <figcaption><b>Atlas memory on vs off</b><span id="ablation-sub">Same harness, best policy so far</span></figcaption>
+        <div id="ablation" class="chart"></div>
+      </figure>
+      <section class="card wide">
+        <h2><b>Run log</b><span>Latest steps, from Atlas</span></h2>
+        <ol class="log" id="log"></ol>
+      </section>
+    </section>
+  </main>
+
+  <div class="tip" id="tip" hidden></div>
+  <script src="dash.js"></script>
+</body>
+</html>

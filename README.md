@@ -63,6 +63,13 @@ Setup creates the collections and the three vector indexes: `python scripts/setu
 
 Because every event carries the harness version, Raindrop shows how the agent's behavior changes as the harness rewrites itself.
 
+## Dashboard
+
+`site/` is a one-screen dashboard: headline result against FGD, what happened at each step of the loop, progress by generation, which policy wins on which workload, memory on vs off, and the run log.
+
+- **Locally:** `python -m backfill.server`, then open http://localhost:8000/demo/
+- **Vercel:** import this repository in Vercel (framework: Other). Set `MONGODB_URI` (and `MONGODB_DB` if not `backfill`) in the project's environment variables, and allow `0.0.0.0/0` in Atlas Network Access. `api/data.js` reads Atlas on each refresh (every 5 seconds). If Atlas is unreachable, the page shows the recorded run in `site/data.json`, written by `python scripts/snapshot.py`.
+
 ## Demo: live or recorded
 
 - **Live:** `python -m backfill.server` while `scripts/run_harness.py` runs. The Harness view updates over an Atlas change stream: headline result, progress against FGD, run log, harness lineage, and the memory on/off comparison.

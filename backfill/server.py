@@ -199,6 +199,15 @@ async def ablation(_: Request):
     return JSONResponse(out)
 
 
+async def demo_data(_: Request):
+    from .demo_data import build
+    try:
+        ab = get_store(ABLATION_DB)
+    except Exception:
+        ab = None
+    return JSONResponse(build(get_store(), ab), headers={"Cache-Control": "no-store"})
+
+
 async def events(request: Request):
     """Push a 'changed' event when harness data changes: Atlas change streams, or polling locally."""
     store = get_store()
@@ -251,7 +260,9 @@ app = Starlette(routes=[
     Route("/api/harness", harness),
     Route("/api/events", events),
     Route("/api/ablation", ablation),
+    Route("/api/data", demo_data),
     Mount("/static", StaticFiles(directory=WEB), name="static"),
+    Mount("/demo", StaticFiles(directory=ROOT / "site", html=True), name="demo"),
 ])
 
 

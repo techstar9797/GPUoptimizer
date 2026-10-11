@@ -4,3 +4,4 @@ __pycache__/
 .localstore/
 results_*.txt
 .venv/
+node_modules/

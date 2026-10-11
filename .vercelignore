@@ -1,0 +1,7 @@
+.venv
+.env
+.localstore
+data
+results/snapshot*.json
+tests
+__pycache__

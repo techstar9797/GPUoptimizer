@@ -37,6 +37,12 @@ def main():
     out = Path(__file__).resolve().parent.parent / "results" / "snapshot.json"
     out.write_text(json.dumps(snap, default=str))
     print(f"Saved {out} ({out.stat().st_size // 1024} KB). Replay with: python -m backfill.server --replay")
+    # The dashboard's offline fallback (also what Vercel serves if Atlas is unreachable)
+    from backfill.demo_data import build
+    site = Path(__file__).resolve().parent.parent / "site" / "data.json"
+    site.write_text(json.dumps(build(get_store(SETTINGS.mongodb_db), get_store("backfill_ablation"), source="recorded"),
+                               default=str))
+    print(f"Saved {site} for the dashboard fallback.")
 
 
 if __name__ == "__main__":
