@@ -1,7 +1,7 @@
 {
   "name": "backfill-dashboard",
   "private": true,
-  "description": "Dashboard for Backfill: static page in site/, live data from MongoDB Atlas via api/data.js",
+  "description": "Backfill dashboard: static page in public/, live data from MongoDB Atlas via api/data.js",
   "engines": {
     "node": ">=18"
   },

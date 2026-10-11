@@ -1,6 +1,6 @@
 """One compact JSON document with everything the demo dashboard shows.
 
-The same shape is produced by api/data.js on Vercel, and saved to site/data.json
+The same shape is produced by dashboard/api/data.js on Vercel, and saved to dashboard/public/data.json
 by scripts/snapshot.py as the offline fallback.
 """
 from __future__ import annotations

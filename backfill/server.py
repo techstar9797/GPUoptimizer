@@ -262,7 +262,7 @@ app = Starlette(routes=[
     Route("/api/ablation", ablation),
     Route("/api/data", demo_data),
     Mount("/static", StaticFiles(directory=WEB), name="static"),
-    Mount("/demo", StaticFiles(directory=ROOT / "site", html=True), name="demo"),
+    Mount("/demo", StaticFiles(directory=ROOT / "dashboard" / "public", html=True), name="demo"),
 ])
 
 

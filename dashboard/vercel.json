@@ -1,0 +1,5 @@
+{
+  "framework": null,
+  "outputDirectory": "public",
+  "functions": { "api/data.js": { "maxDuration": 15 } }
+}

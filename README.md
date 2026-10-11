@@ -65,10 +65,10 @@ Because every event carries the harness version, Raindrop shows how the agent's 
 
 ## Dashboard
 
-`site/` is a one-screen dashboard: headline result against FGD, what happened at each step of the loop, progress by generation, which policy wins on which workload, memory on vs off, and the run log.
+`dashboard/` is a one-screen dashboard: headline result against FGD, what happened at each step of the loop, progress by generation, which policy wins on which workload, memory on vs off, and the run log.
 
 - **Locally:** `python -m backfill.server`, then open http://localhost:8000/demo/
-- **Vercel:** import this repository in Vercel (framework: Other). Set `MONGODB_URI` (and `MONGODB_DB` if not `backfill`) in the project's environment variables, and allow `0.0.0.0/0` in Atlas Network Access. `api/data.js` reads Atlas on each refresh (every 5 seconds). If Atlas is unreachable, the page shows the recorded run in `site/data.json`, written by `python scripts/snapshot.py`.
+- **Vercel:** import this repository in Vercel and set **Root Directory** to `dashboard` (framework: Other). Set `MONGODB_URI` (and `MONGODB_DB` if not `backfill`) in the project's environment variables, and allow `0.0.0.0/0` in Atlas Network Access. `dashboard/api/data.js` reads Atlas on each refresh (every 5 seconds). If Atlas is unreachable, the page shows the recorded run in `dashboard/public/data.json`, written by `python scripts/snapshot.py`.
 
 ## Demo: live or recorded
 
