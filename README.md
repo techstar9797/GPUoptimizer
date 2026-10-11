@@ -2,6 +2,13 @@
 
 A self-improving agent harness that teaches itself to schedule a real GPU cluster.
 
+**Live dashboard:** https://gpuoptimizer-dashboard.vercel.app  
+**Demo video (1 min):** https://youtu.be/T4KK97ZQODk
+
+| | Agent | FGD (ATC '23) | GPU packing | Best-fit |
+|---|---|---|---|---|
+| GPUs left idle, production mix (lower is better) | **311** | 452 | 387 | 524 |
+
 GPU clusters strand capacity. When tasks ask for fractions of a GPU, the leftovers on each card become too small for the next task, and whole GPUs sit idle while jobs wait. Backfill's agent writes scheduling policies, replays them against a production trace, and rewrites its own harness (rules, context policy, tools, guardrails) based on hard metrics. Its target is the published state of the art: Fragmentation Gradient Descent (FGD), USENIX ATC '23.
 
 ## What was built, and when
@@ -68,6 +75,7 @@ Because every event carries the harness version, Raindrop shows how the agent's 
 `dashboard/` is a one-screen dashboard with two tabs. **Overview:** headline result against FGD, what happened at each step of the loop, progress by generation, which policy wins on which workload, memory on vs off, and the run log. **Cluster:** a playback of all 6,212 GPUs filling up under each policy, recorded by `python scripts/export_cluster.py`.
 
 - **Locally:** `python -m backfill.server`, then open http://localhost:8000/demo/
+- **Hosted:** https://gpuoptimizer-dashboard.vercel.app
 - **Vercel:** import this repository in Vercel and set **Root Directory** to `dashboard` (framework: Other). Set `MONGODB_URI` (and `MONGODB_DB` if not `backfill`) in the project's environment variables, and allow `0.0.0.0/0` in Atlas Network Access. `dashboard/api/data.js` reads Atlas on each refresh (every 5 seconds). If Atlas is unreachable, the page shows the recorded run in `dashboard/public/data.json`, written by `python scripts/snapshot.py`.
 
 ## Demo: live or recorded
@@ -103,15 +111,50 @@ A policy is a function `policy(ctx) -> scores`. `ctx` exposes, for each candidat
 
 ## Run it
 
+### 1. Open the hosted dashboard (nothing to install)
+
+Go to **https://gpuoptimizer-dashboard.vercel.app**.
+- **Overview:** headline result, what happened at each step of the loop, progress by generation, which policy wins on which workload, and the run log. The page reads Atlas every 5 seconds and falls back to the recorded run if Atlas is unreachable.
+- **Cluster:** press play to watch all 6,212 GPUs fill up under the agent's policy, FGD, GPU packing and best-fit.
+
+### 2. Run the dashboard locally with the recorded run (no keys)
+
+```bash
+git clone https://github.com/techstar9797/GPUoptimizer.git && cd GPUoptimizer
+python3 -m http.server 8080 -d dashboard/public
+# open http://localhost:8080
+```
+
+### 3. Run the full system locally
+
+Needs Python 3.11+, a MongoDB Atlas cluster, and OpenAI and Voyage AI keys. Raindrop is optional.
+
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env                              # fill in the keys
-python scripts/setup_atlas.py                     # collections, vector indexes, harness v1
-python scripts/run_harness.py --epochs 10 --gens 3            # the long run
-python scripts/run_harness.py --epochs 10 --gens 3 --no-memory --db backfill_ablation
-python tests/test_offline.py                      # offline checks, no keys needed
-python -m backfill.server                         # console at http://localhost:8000
-python scripts/run_baselines.py                      # 4 workloads x 3 seeds
-python scripts/run_baselines.py --workloads default --seeds 1
+cp .env.example .env              # MONGODB_URI, OPENAI_API_KEY, VOYAGE_API_KEY, RAINDROP_WRITE_KEY
+python scripts/check_env.py       # verifies each key and the Atlas connection
+python tests/test_offline.py      # offline checks, no keys needed
+python scripts/setup_atlas.py     # collections, vector indexes, harness v1
+python scripts/run_baselines.py   # baselines: 4 workloads x 3 seeds
 ```
+
+Start the self-improving run in one terminal and the console in another:
+
+```bash
+python scripts/run_harness.py --epochs 10 --gens 3                                      # main run
+python scripts/run_harness.py --epochs 10 --gens 3 --no-memory --db backfill_ablation   # optional: memory off
+python -m backfill.server         # console at http://localhost:8000, dashboard at http://localhost:8000/demo/
+```
+
+Watch progress from the terminal with `python scripts/status.py`. To refresh the recorded run used by the dashboard:
+
+```bash
+python scripts/export_cluster.py && python scripts/snapshot.py
+```
+
+`python -m backfill.server --replay` serves the console from `results/snapshot.json` with no network.
+
+### 4. Deploy the dashboard to Vercel
+
+Import this repository in Vercel and set **Root Directory** to `dashboard` (framework: Other). Add `MONGODB_URI` (and `MONGODB_DB` if not `backfill`) as environment variables, and allow `0.0.0.0/0` in Atlas Network Access so the serverless function can connect.
