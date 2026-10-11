@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backfill console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <h1>Backfill</h1>
+      <p>A harness that teaches itself to schedule a real GPU cluster</p>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-view="arena">Cluster</button>
+      <button role="tab" aria-selected="false" data-view="harness">Harness</button>
+    </nav>
+    <p class="cluster-facts" id="facts">Loading cluster…</p>
+  </header>
+
+  <main>
+    <section class="view" id="view-arena">
+      <form class="controls" id="controls">
+        <label>Workload
+          <select id="workload"></select>
+        </label>
+        <label>Scheduling policy
+          <select id="policy"></select>
+        </label>
+        <label>Seed
+          <input id="seed" type="number" min="0" max="999" value="0">
+        </label>
+        <button type="submit" id="run">Run simulation</button>
+        <p class="run-status" id="status" role="status" aria-live="polite">Pick a workload and policy, then run.</p>
+      </form>
+
+      <div class="stage">
+        <figure class="map-wrap">
+          <figcaption>
+            <span>Every GPU in the cluster, grouped by model</span>
+            <span class="legend">
+              <span><i class="sw sw-free"></i>Idle</span>
+              <span><i class="sw sw-used"></i>Allocated</span>
+              <span><i class="sw sw-frag"></i>Leftover on a shared GPU</span>
+            </span>
+          </figcaption>
+          <canvas id="map" aria-label="Cluster map of all GPUs and their allocation"></canvas>
+        </figure>
+
+        <aside class="readout" aria-label="Run results">
+          <div class="headline">
+            <span class="hl-value" id="m-failed">–</span>
+            <span class="hl-label">GPUs of demand turned away</span>
+            <span class="hl-compare" id="m-compare"></span>
+          </div>
+          <dl class="facts">
+            <div><dt>Arrived demand</dt><dd id="m-progress">–</dd></div>
+            <div><dt>Allocated</dt><dd id="m-alloc">–</dd></div>
+            <div><dt>Leftover on shared GPUs</dt><dd id="m-frag">–</dd></div>
+            <div><dt>Tasks rejected</dt><dd id="m-rejected">–</dd></div>
+          </dl>
+          <figure class="chart-wrap">
+            <figcaption>Demand turned away as the cluster fills</figcaption>
+            <div class="chart" id="chart"></div>
+          </figure>
+        </aside>
+      </div>
+
+      <section class="board">
+        <h2>Unallocated GPUs at full demand, by policy</h2>
+        <p class="board-note">Lower is better. Mean over seeds, when arrived demand equals 100% of the cluster's 6,212 GPUs.</p>
+        <div class="table-scroll"><table id="board"></table></div>
+      </section>
+    </section>
+
+    <section class="view" id="view-harness" hidden>
+      <div class="empty">
+        <h2>No harness generations yet</h2>
+        <p>Each time the agent rewrites its harness, the new version appears here with its parent, the rules it changed, and its score on held-out workloads.</p>
+        <p>Generations start once the policy-writing agent is connected to an LLM.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="tooltip" id="tip" hidden></div>
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

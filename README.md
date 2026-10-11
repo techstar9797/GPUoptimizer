@@ -13,6 +13,7 @@ Everything in this repository was written on October 11, 2026, starting at 10:30
 | Trace loader for Alibaba `cluster-trace-gpu-v2023` | done |
 | Monte Carlo GPU-sharing simulator, with state deduplication for speed | done |
 | Baseline policies: random, dot-product, GPU packing, best-fit, FGD | done |
+| Console: live cluster map of all 6,212 GPUs, failure curve, leaderboard | done |
 | Inner loop: agent writes policies, sandboxed and scored | next |
 | Outer loop: harness rewrites itself, versioned in MongoDB Atlas | planned |
 | Long-horizon memory with Atlas Vector Search | planned |
@@ -46,7 +47,8 @@ A policy is a function `policy(ctx) -> scores`. `ctx` exposes, for each candidat
 ## Run it
 
 ```bash
-pip install numpy pandas
+pip install -r requirements.txt
+python -m backfill.server                         # console at http://localhost:8000
 python scripts/run_baselines.py                      # 4 workloads x 3 seeds
 python scripts/run_baselines.py --workloads default --seeds 1
 ```

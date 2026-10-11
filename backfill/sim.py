@@ -174,7 +174,10 @@ Policy = Callable[[Ctx], np.ndarray]
 
 def simulate(policy: Policy, nodes: Nodes, pods: Pods, *, seed: int = 0, stop_frac: float = 1.0,
              name: str = "policy", types: TaskTypes | None = None, top_k_types: int = 60,
-             dedupe: bool = True, time_limit: float | None = None) -> Result:
+             dedupe: bool = True, time_limit: float | None = None,
+             on_frame: Callable | None = None, frame_every: float = 0.02) -> Result:
+    """Run one simulation. ``on_frame(cluster, stats)`` is called every ``frame_every``
+    of arrived demand, for live views."""
     t0 = time.time()
     rng = np.random.default_rng(seed)
     cl = Cluster(nodes)
@@ -183,7 +186,7 @@ def simulate(policy: Policy, nodes: Nodes, pods: Pods, *, seed: int = 0, stop_fr
     cap = nodes.total_gpu_milli
     demand = pods.gpu_demand()
     arrived_milli = failed_milli = failed = n = 0
-    curve, next_mark = [], 0.05
+    curve, next_mark, next_frame = [], 0.05, 0.0
     prng = np.random.default_rng(seed + 1_000_003)
     err = None
     while arrived_milli < stop_frac * cap:
@@ -228,6 +231,10 @@ def simulate(policy: Policy, nodes: Nodes, pods: Pods, *, seed: int = 0, stop_fr
             cl.gpu_free[node] = gpu_after[j]
         while arrived_milli / cap >= next_mark:
             curve.append((round(next_mark, 2), cl.alloc_milli() / cap)); next_mark += 0.05
+        if on_frame and arrived_milli / cap >= next_frame:
+            on_frame(cl, {"progress": arrived_milli / cap, "alloc": cl.alloc_milli() / GPU_MILLI,
+                          "failed_gpus": failed_milli / GPU_MILLI, "failed_pods": failed, "arrived_pods": n})
+            next_frame += frame_every
         if time_limit and time.time() - t0 > time_limit:
             err = f"time limit {time_limit}s exceeded"
             break
