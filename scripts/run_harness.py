@@ -62,7 +62,15 @@ def main():
             if a.hours and time.time() - t0 > a.hours * 3600:
                 print("Time budget reached.")
                 break
-            h = run_epoch(h, e, a.gens, locked=locked, store=store)
+            try:
+                h = run_epoch(h, e, a.gens, locked=locked, store=store)
+            except KeyboardInterrupt:
+                raise
+            except Exception as ex:  # keep the long run alive through network failures
+                print(f"epoch {e} failed: {type(ex).__name__}: {ex}. Continuing with harness v{h['version']}.")
+                time.sleep(10)
+                from backfill.harness import latest_active as _la
+                h = _la(store) or h
             observe.flush()
     finally:
         observe.shutdown()

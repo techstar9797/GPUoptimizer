@@ -27,9 +27,7 @@ def embed(texts: list[str], input_type: str = "document") -> list[list[float]]:
         [e for e in ENDPOINTS if e != SETTINGS.voyage_url]
     last = None
     for url in order:
-        r = httpx.post(url, headers={"Authorization": f"Bearer {SETTINGS.voyage_api_key}"},
-                       json={"input": texts, "model": SETTINGS.voyage_model, "input_type": input_type},
-                       timeout=60)
+        r = _post_retry(url, {"input": texts, "model": SETTINGS.voyage_model, "input_type": input_type})
         if r.status_code == 200:
             _working = url
             break
@@ -42,6 +40,22 @@ def embed(texts: list[str], input_type: str = "document") -> list[list[float]]:
         raise RuntimeError(f"Voyage embeddings failed with HTTP {last.status_code}: {last.text[:300]}")
     data = sorted(r.json()["data"], key=lambda d: d["index"])
     return [d["embedding"] for d in data]
+
+
+def _post_retry(url: str, body: dict, attempts: int = 4):
+    """POST with retries on network errors, rate limits and server errors (venue Wi-Fi is flaky)."""
+    import time
+    delay = 2.0
+    for i in range(attempts):
+        try:
+            r = httpx.post(url, headers={"Authorization": f"Bearer {SETTINGS.voyage_api_key}"}, json=body, timeout=30)
+            if r.status_code not in (429, 500, 502, 503, 504) or i == attempts - 1:
+                return r
+        except httpx.TransportError:
+            if i == attempts - 1:
+                raise
+        time.sleep(delay)
+        delay *= 2
 
 
 def embed_one(text: str, input_type: str = "document") -> list[float]:

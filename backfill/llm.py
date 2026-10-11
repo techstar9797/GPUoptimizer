@@ -24,7 +24,7 @@ def complete(system: str, user: str, *, temperature: float = 0.8, max_tokens: in
         raise RuntimeError("OPENAI_API_KEY is not set. Add it to .env in the repo root.")
     if _client is None:
         from openai import OpenAI
-        _client = OpenAI(api_key=SETTINGS.openai_api_key)
+        _client = OpenAI(api_key=SETTINGS.openai_api_key, max_retries=5, timeout=120)
     kwargs = dict(model=SETTINGS.openai_model,
                   messages=[{"role": "system", "content": system}, {"role": "user", "content": user}])
     # Reasoning models reject temperature and use max_completion_tokens.

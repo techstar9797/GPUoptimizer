@@ -111,8 +111,11 @@ def build_prompt(harness: dict, workloads: list[str], store, gen: Generation) ->
         query = (f"How to reduce unallocated GPUs on {weakest} workloads; "
                  f"what made earlier policies regress there.")
         with gen.tool("atlas_vector_search.lessons", input={"query": query, "k": k}) as t:
-            recalled = store.vector_search("lessons", embed_one(query, "query"), k=k,
-                                           filter={"family": {"$in": [family_of(weakest), "general"]}})
+            try:
+                recalled = store.vector_search("lessons", embed_one(query, "query"), k=k,
+                                               filter={"family": {"$in": [family_of(weakest), "general"]}})
+            except Exception:
+                recalled = []
             t["output"] = [{"text": l["text"], "similarity": round(l["similarity"], 3)} for l in recalled]
         if recalled:
             parts.append("## Lessons recalled from earlier generations\n" +
@@ -199,8 +202,11 @@ def run_generation(harness: dict, generation: int, workloads: list[str] | None =
 
     # Duplicate check with Atlas Vector Search
     if not err:
-        run["code_embedding"] = embed_one(code)
-        if spec["tools"].get("duplicate_check"):
+        try:
+            run["code_embedding"] = embed_one(code)
+        except Exception as e:  # network trouble: skip the duplicate check rather than lose the generation
+            log(f"  embedding failed ({type(e).__name__}); skipping duplicate check")
+        if spec["tools"].get("duplicate_check") and "code_embedding" in run:
             with gen.tool("atlas_vector_search.runs", input={"k": 3}) as t:
                 hits = store.vector_search("runs", run["code_embedding"], k=3, filter={"kind": "candidate"})
                 t["output"] = [{"run": h["_id"], "similarity": round(h["similarity"], 4)} for h in hits]
@@ -260,8 +266,11 @@ def run_generation(harness: dict, generation: int, workloads: list[str] | None =
     for l in lessons:
         doc = {"_id": new_id("les"), "text": l["text"], "family": l.get("family", "general"),
                "run_id": run["_id"], "harness_id": harness["_id"], "generation": generation,
-               "outcome": run.get("mean_unalloc"), "created_at": time.time(),
-               "embedding": embed_one(l["text"])}
+               "outcome": run.get("mean_unalloc"), "created_at": time.time()}
+        try:
+            doc["embedding"] = embed_one(l["text"])
+        except Exception as e:
+            log(f"  lesson stored without embedding ({type(e).__name__})")
         store.insert("lessons", doc)
     run["lessons"] = [l["text"] for l in lessons]
     run["signals"] = gen.signals
