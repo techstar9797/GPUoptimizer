@@ -16,10 +16,39 @@
       <h1>Backfill</h1>
       <p>An agent harness that rewrites itself to schedule 6,212 production GPUs</p>
     </div>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button role="tab" aria-selected="true" data-view="overview">Overview</button>
+      <button role="tab" aria-selected="false" data-view="cluster">Cluster</button>
+    </nav>
     <div class="status" id="status" role="status" aria-live="polite">Loading…</div>
   </header>
 
-  <main>
+  <main id="view-cluster" class="cluster-view" hidden>
+    <section class="cl-top">
+      <div class="cl-pick" id="cl-pick" role="radiogroup" aria-label="Scheduling policy"></div>
+      <div class="cl-play">
+        <button type="button" id="cl-play">Play</button>
+        <input type="range" id="cl-scrub" min="0" max="50" value="50" aria-label="Arrived demand">
+        <span id="cl-progress">100% of capacity requested</span>
+      </div>
+    </section>
+    <section class="cl-main">
+      <figure class="card cl-map">
+        <figcaption><b>All 6,212 GPUs as the cluster fills</b>
+          <span class="legend"><i class="sw sw-idle"></i>Idle <i class="sw sw-used"></i>Allocated <i class="sw sw-left"></i>Stranded leftover on a shared GPU</span></figcaption>
+        <canvas id="cl-canvas" aria-label="Map of every GPU in the cluster"></canvas>
+      </figure>
+      <aside class="cl-side">
+        <div class="kpi hero"><span class="k-label">Demand turned away</span><span class="k-value" id="cl-failed">–</span><span class="k-sub">GPUs of requests that could not be placed</span></div>
+        <div class="kpi"><span class="k-label">Allocated</span><span class="k-value" id="cl-alloc">–</span><span class="k-sub">of 6,212 GPUs</span></div>
+        <div class="kpi"><span class="k-label">Stranded on shared GPUs</span><span class="k-value" id="cl-left">–</span><span class="k-sub">GPUs of leftover slivers</span></div>
+        <div class="card"><h2><b>At full demand</b><span>GPUs left idle</span></h2><ol class="cl-bars" id="cl-bars"></ol></div>
+      </aside>
+    </section>
+    <p class="foot cl-foot" id="cl-foot"></p>
+  </main>
+
+  <main id="view-overview">
     <section class="kpis" aria-label="Key results">
       <div class="kpi hero">
         <span class="k-label">GPUs left idle, agent's best policy</span>
@@ -74,5 +103,6 @@
 
   <div class="tip" id="tip" hidden></div>
   <script src="dash.js"></script>
+  <script src="cluster.js"></script>
 </body>
 </html>
