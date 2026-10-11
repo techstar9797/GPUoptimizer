@@ -18,14 +18,16 @@ import numpy as np
 ALLOWED_IMPORTS = {"numpy", "math"}
 BANNED_NAMES = {
     "open", "exec", "eval", "compile", "__import__", "globals", "locals", "vars",
-    "getattr", "setattr", "delattr", "input", "breakpoint", "help", "exit", "quit",
+    "setattr", "delattr", "input", "breakpoint", "help", "exit", "quit",
     "memoryview",
 }
 SAFE_BUILTINS = {
     n: __builtins__[n] if isinstance(__builtins__, dict) else getattr(__builtins__, n)
     for n in ["abs", "min", "max", "sum", "len", "range", "enumerate", "zip", "float", "int",
               "bool", "round", "sorted", "list", "tuple", "dict", "set", "any", "all", "map",
-              "filter", "isinstance", "reversed", "pow", "divmod", "ValueError", "Exception"]
+              "filter", "isinstance", "reversed", "pow", "divmod", "ValueError", "Exception",
+              "str", "next", "iter", "hasattr", "getattr", "frozenset", "TypeError", "KeyError",
+              "IndexError", "StopIteration", "print"]
 }
 
 
@@ -48,6 +50,10 @@ def check_source(src: str) -> None:
                 raise PolicyRejected(f"import of {', '.join(bad)} is not allowed (numpy and math only)")
         elif isinstance(node, ast.Attribute) and node.attr.startswith("_"):
             raise PolicyRejected(f"access to private attribute '{node.attr}' is not allowed")
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("getattr", "hasattr"):
+            name = node.args[1] if len(node.args) > 1 else None
+            if not (isinstance(name, ast.Constant) and isinstance(name.value, str) and not name.value.startswith("_")):
+                raise PolicyRejected(f"{node.func.id}() needs a plain attribute name in quotes, not starting with _")
         elif isinstance(node, ast.Name) and node.id in BANNED_NAMES:
             raise PolicyRejected(f"use of '{node.id}' is not allowed")
         elif isinstance(node, (ast.Global, ast.Nonlocal)):
