@@ -1,4 +1,6 @@
 __pycache__/
 *.pyc
 .env
+.localstore/
 results_*.txt
+.venv/

@@ -2,3 +2,8 @@ numpy
 pandas
 starlette
 uvicorn
+pymongo
+openai
+python-dotenv
+httpx
+raindrop-ai
