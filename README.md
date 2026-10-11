@@ -14,9 +14,54 @@ Everything in this repository was written on October 11, 2026, starting at 10:30
 | Monte Carlo GPU-sharing simulator, with state deduplication for speed | done |
 | Baseline policies: random, dot-product, GPU packing, best-fit, FGD | done |
 | Console: live cluster map of all 6,212 GPUs, failure curve, leaderboard | done |
-| Inner loop: agent writes policies, sandboxed and scored | next |
-| Outer loop: harness rewrites itself, versioned in MongoDB Atlas | planned |
-| Long-horizon memory with Atlas Vector Search | planned |
+| Inner loop: OpenAI writes policies; sandboxed, deduplicated, simulated, critiqued | done |
+| Outer loop: a meta-agent rewrites the harness; children kept only if they generalize | done |
+| MongoDB Atlas: harness lineage, runs, lessons, workload fingerprints, ledger | done |
+| Atlas Vector Search: duplicate check, lesson recall, workload routing | done |
+| Raindrop: interactions, tool spans, outcome and edit signals per harness version | done |
+| Console: Harness view, live over an Atlas change stream | done |
+
+## How it works
+
+```
+outer loop (backfill/meta.py)             meta-agent reads stats from Atlas, rewrites the harness
+  └─ harness vN  (Atlas: harness_versions, parent_id → vN-1)
+       └─ inner loop (backfill/agent.py)  per generation:
+            build context ── Atlas Vector Search recalls lessons
+            OpenAI writes score(ctx)
+            guardrails + sandbox (backfill/sandbox.py)
+            Atlas Vector Search: near-duplicate of an earlier policy? reuse its score
+            simulator scores it on 4 training workloads (backfill/sim.py)
+            critic writes lessons → Voyage embeddings → Atlas
+  child harness kept only if its best policy beats the parent's on 4 held-out workloads
+Raindrop observes every step (backfill/observe.py)
+```
+
+## Where MongoDB Atlas is used
+
+| Feature | What it does here | Code |
+|---|---|---|
+| Documents with a changing shape | Each harness version is a document; the meta-agent can add rules, tools and guardrails without a migration | `backfill/harness.py`, `backfill/meta.py` |
+| `$graphLookup` | Walks a harness version's ancestry for the lineage view | `AtlasStore.lineage` in `backfill/store.py` |
+| Vector Search on `runs.code_embedding` | Finds a near-identical earlier policy and reuses its score instead of simulating again | `run_generation` in `backfill/agent.py` |
+| Vector Search on `lessons.embedding`, filtered by workload family | Recalls what earlier generations learned about the workload the agent is weakest on | `build_prompt` in `backfill/agent.py` |
+| Vector Search on `workloads.fingerprint` | Routes an unseen workload to the closest known one | `scripts/route.py` |
+| Aggregation pipeline | Best result per harness version | `AtlasStore.leaderboard` |
+| Change streams | Pushes new runs, lessons and harness versions to the console as they land | `events` in `backfill/server.py` |
+
+Setup creates the collections and the three vector indexes: `python scripts/setup_atlas.py`.
+
+## Where Raindrop is used
+
+| What the agent does | What Raindrop records | Code |
+|---|---|---|
+| A generation (prompt, policy, score, critique) | One interaction, tagged with `harness_version`, `harness_id`, `generation` | `Generation` in `backfill/observe.py` |
+| Writes policy code | The code as a `code` attachment | `run_generation` |
+| Calls a tool: LLM, simulator, Atlas Vector Search | A tool span with input, output, duration and errors | `Generation.tool` |
+| Gets a measured result | Signals: `beat_best`, `regressed`, `beat_fgd`, `duplicate_policy`, `sandbox_violation`, `policy_crashed`, `guardrail_tripped` | `run_generation` |
+| Rewrites its harness | An `edit` signal with the spec before and after, and the rationale; then `harness_accepted` or `harness_rejected` | `run_epoch` in `backfill/meta.py` |
+
+Because every event carries the harness version, Raindrop shows how the agent's behavior changes as the harness rewrites itself.
 
 ## Data
 
@@ -47,7 +92,13 @@ A policy is a function `policy(ctx) -> scores`. `ctx` exposes, for each candidat
 ## Run it
 
 ```bash
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env                              # fill in the keys
+python scripts/setup_atlas.py                     # collections, vector indexes, harness v1
+python scripts/run_harness.py --epochs 10 --gens 3            # the long run
+python scripts/run_harness.py --epochs 10 --gens 3 --no-memory --db backfill_ablation
+python tests/test_offline.py                      # offline checks, no keys needed
 python -m backfill.server                         # console at http://localhost:8000
 python scripts/run_baselines.py                      # 4 workloads x 3 seeds
 python scripts/run_baselines.py --workloads default --seeds 1

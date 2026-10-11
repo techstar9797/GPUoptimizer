@@ -77,7 +77,9 @@ def create_root(store=None, spec: dict | None = None, note: str = "Initial harne
 
 def child(parent: dict, spec: dict, rationale: str, store=None, author: str = "meta-agent") -> dict:
     store = store or get_store()
-    doc = {"_id": new_id("h"), "version": parent["version"] + 1, "parent_id": parent["_id"],
+    newest = store.find("harness_versions", sort=[("version", -1)], limit=1)
+    version = (newest[0]["version"] if newest else parent["version"]) + 1
+    doc = {"_id": new_id("h"), "version": version, "parent_id": parent["_id"],
            "created_at": time.time(), "spec": spec, "rationale": rationale, "author": author,
            "score": None, "heldout_score": None, "status": "candidate"}
     store.insert("harness_versions", doc)

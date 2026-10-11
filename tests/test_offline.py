@@ -64,7 +64,54 @@ def test_generation_and_duplicate():
         shutil.rmtree(d)
 
 
+
+def test_meta_epoch():
+    """One outer-loop epoch: meta-agent edits the harness, child is judged on held-out workloads."""
+    import itertools
+    from backfill import meta
+    from backfill.config import TRAIN_WORKLOADS
+    counter = itertools.count()
+    variants = ["-left", "-left + 0.3 * ctx.cpu_after / ctx.cpu_cap", "-left - 0.5 * ctx.mem_after / ctx.mem_cap"]
+
+    def stub(system, user, **kw):
+        if "Diagnose what is holding" in user:
+            text = ('{"diagnosis": "Few valid policies.", "rationale": "Show more failures and recall lessons.", '
+                    '"spec": {"context_policy": {"recent_failures": 4, "recall_lessons": 3, "top_policies": 99}, '
+                    '"tools": {"lesson_recall": true}, "rules": ["Use ctx.frag."], "temperature": 0.5}}')
+        elif "Write an improved policy" in user:
+            v = variants[next(counter) % len(variants)]
+            text = POLICY.replace("return -left", f"return {v}")
+        else:
+            text = '{"lessons": [{"family": "gpushare", "text": "Leftover-based packing strands small GPU slices."}]}'
+        return llm.Reply(text=text, prompt_tokens=10, completion_tokens=10, model="stub")
+
+    llm.complete = stub
+    meta.TRAIN_WORKLOADS = ["default"]
+    meta.HELDOUT_WORKLOADS = ["gpushare80"]
+    agent.TRAIN_WORKLOADS = ["default"]
+    d = Path(tempfile.mkdtemp())
+    try:
+        store = LocalStore(d)
+        h = create_root(store)
+        after = meta.run_epoch(h, 1, gens_per_harness=1, store=store)
+        versions = store.find("harness_versions", sort=[("version", 1)])
+        assert len(versions) == 2
+        kid = versions[1]
+        assert kid["parent_id"] == h["_id"]
+        assert kid["spec"]["context_policy"]["top_policies"] == 5, "bounds were not enforced"
+        assert kid["spec"]["tools"]["lesson_recall"] is True
+        assert kid["status"] in ("active", "rejected")
+        assert len(store.lineage(kid["_id"])) == 2
+        locked_spec, notes = meta.validate_spec(h["spec"], {"tools": {"lesson_recall": True}}, meta.MEMORY_KEYS)
+        assert locked_spec["tools"]["lesson_recall"] is False and notes
+        print(f"  epoch result: v{kid['version']} {kid['status']}, active v{after['version']}")
+    finally:
+        shutil.rmtree(d)
+        meta.TRAIN_WORKLOADS = TRAIN_WORKLOADS
+
+
 if __name__ == "__main__":
     test_sandbox_rejects()
     test_generation_and_duplicate()
+    test_meta_epoch()
     print("offline tests passed")

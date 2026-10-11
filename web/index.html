@@ -78,15 +78,40 @@
     </section>
 
     <section class="view" id="view-harness" hidden>
-      <div class="empty">
+      <div class="sponsor-strip" id="sponsors"></div>
+
+      <div class="empty" id="h-empty" hidden>
         <h2>No harness generations yet</h2>
-        <p>Each time the agent rewrites its harness, the new version appears here with its parent, the rules it changed, and its score on held-out workloads.</p>
-        <p>Generations start once the policy-writing agent is connected to an LLM.</p>
+        <p>Run <code>python scripts/setup_atlas.py</code>, then <code>python scripts/run_harness.py</code>. Each generation and each harness rewrite appears here as it lands.</p>
+      </div>
+
+      <div id="h-body" hidden>
+        <figure class="panel progress-wrap">
+          <figcaption>
+            <span>Best policy so far, unallocated GPUs on the training workloads</span>
+            <span class="legend">
+              <span><i class="sw sw-used"></i>Best so far</span>
+              <span><i class="dot-ok"></i>Each generation</span>
+              <span><i class="dot-fail"></i>Rejected or crashed</span>
+            </span>
+          </figcaption>
+          <div class="chart" id="progress"></div>
+        </figure>
+
+        <div class="h-grid">
+          <section class="panel lineage">
+            <h2>Harness versions</h2>
+            <p class="panel-note">Each version is a document in Atlas pointing at its parent. A child is kept only if its best policy does better on held-out workloads.</p>
+            <ol id="lineage"></ol>
+          </section>
+          <section class="panel detail" id="detail"></section>
+        </div>
       </div>
     </section>
   </main>
 
   <div class="tooltip" id="tip" hidden></div>
   <script type="module" src="/static/app.js"></script>
+  <script type="module" src="/static/harness.js"></script>
 </body>
 </html>
