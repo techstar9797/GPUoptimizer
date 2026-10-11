@@ -85,6 +85,17 @@ def build_prompt(harness: dict, workloads: list[str], store, gen: Generation) ->
     if spec["rules"]:
         parts.append("## Rules\n" + "\n".join(f"- {r}" for r in spec["rules"]))
 
+    top = store.find("runs", {"ok": True, "kind": "candidate"}, sort=[("mean_unalloc", 1)], limit=1)
+    if top and "fgd" in base:
+        gaps = sorted(((top[0]["per_workload"].get(w, 0) - base["fgd"].get(w, 0), w) for w in workloads), reverse=True)
+        if gaps and gaps[0][0] > 0:
+            g, w = gaps[0]
+            parts.append(f"## Biggest gap\nOn {w} the best policy so far leaves {top[0]['per_workload'][w]:.0f} GPUs idle, "
+                         f"{g:.0f} more than FGD ({base['fgd'][w]:.0f}). "
+                         + ("Tasks there are pinned to specific GPU models (ctx.pod.spec), so placing other tasks on scarce "
+                            "models strands capacity those pinned tasks need." if w.startswith("gpuspec") else
+                            "Close this gap without losing ground on the other workloads."))
+
     best = store.find("runs", {"ok": True, "kind": "candidate"}, sort=[("mean_unalloc", 1)],
                       limit=cp.get("top_policies", 0)) if cp.get("top_policies") else []
     for i, r in enumerate(best, 1):
