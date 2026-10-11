@@ -251,15 +251,18 @@ def _match(d: dict, q: dict) -> bool:
     return True
 
 
-_STORE = None
+_STORES: dict = {}
 
 
-def get_store():
-    """Atlas when MONGODB_URI is set, otherwise a local JSON store under .localstore/."""
-    global _STORE
-    if _STORE is None:
+def get_store(db: str | None = None):
+    """Atlas when MONGODB_URI is set, otherwise a local JSON store under .localstore/.
+    Pass db to open another database, such as the no-memory ablation run."""
+    import os
+    name = db or os.environ.get("MONGODB_DB") or SETTINGS.mongodb_db
+    if name not in _STORES:
         if SETTINGS.mongodb_uri:
-            _STORE = AtlasStore(SETTINGS.mongodb_uri, SETTINGS.mongodb_db)
+            _STORES[name] = AtlasStore(SETTINGS.mongodb_uri, name)
         else:
-            _STORE = LocalStore(Path(__file__).resolve().parent.parent / ".localstore")
-    return _STORE
+            root = Path(__file__).resolve().parent.parent / ".localstore"
+            _STORES[name] = LocalStore(root if name == SETTINGS.mongodb_db else root / name)
+    return _STORES[name]

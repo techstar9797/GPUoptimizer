@@ -241,3 +241,8 @@ th.sel, td.sel { background: color-mix(in srgb, var(--used) 8%, transparent); }
 details.code summary { cursor: pointer; font-size: 13px; color: var(--ink-2); margin-top: 4px; }
 details.code pre { font-size: 12px; overflow-x: auto; background: var(--bg); padding: 10px; border-radius: var(--radius-sm); max-height: 320px; }
 @media (max-width: 1000px) { .h-grid { grid-template-columns: 1fr; } }
+
+.sw-off { background: var(--frag); }
+#ablation .on { fill: none; stroke: var(--used); stroke-width: 2.5; }
+#ablation .off { fill: none; stroke: var(--frag); stroke-width: 2.5; stroke-dasharray: 6 4; }
+#ablation .ref { stroke: var(--base-line); stroke-width: 1.5; stroke-dasharray: 5 4; }

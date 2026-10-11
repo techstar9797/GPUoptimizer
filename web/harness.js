@@ -34,6 +34,7 @@ function render() {
     H.selected = (d.versions.find((v) => v.status === "active") || d.versions[d.versions.length - 1])._id;
   }
   renderProgress(d);
+  renderAblation();
   renderLineage(d);
   renderDetail(d);
 }
@@ -120,6 +121,45 @@ function renderProgress(d) {
     c.addEventListener("mouseleave", untip);
     c.addEventListener("click", () => { const r = runs.find((x) => x._id === c.dataset.run); H.selected = r.harness_id; render(); });
   });
+}
+
+// ---------- Ablation: memory on vs off ----------
+async function renderAblation() {
+  let a;
+  try { a = await fetch("/api/ablation").then((r) => r.json()); } catch { return; }
+  const wrap = $("ablation-wrap");
+  if (!a.memory_off || !a.memory_on?.points?.length) { wrap.hidden = true; return; }
+  wrap.hidden = false;
+  const on = a.memory_on, off = a.memory_off;
+  const when = (c) => (c.beat_fgd_at ? `beat FGD at generation ${c.beat_fgd_at}` : "has not beaten FGD yet");
+  $("ablation-note").textContent =
+    `Memory on: best ${fmt(on.best, 1)} after ${on.generations} generations, ${when(on)}, ${on.duplicates} duplicate${on.duplicates === 1 ? "" : "s"} skipped. ` +
+    `Memory off: best ${fmt(off.best, 1)} after ${off.generations} generations, ${when(off)}.`;
+  const W = 1100, Ht = 220, m = { t: 12, r: 120, b: 30, l: 52 };
+  const n = Math.max(on.generations, off.generations, 1);
+  const vals = [...on.points, ...off.points].map((p) => p.best).filter((v) => v != null);
+  if (a.fgd != null) vals.push(a.fgd);
+  if (!vals.length) { $("ablation").innerHTML = ""; return; }
+  const yMin = Math.min(...vals) * 0.92, yMax = Math.max(...vals) * 1.04;
+  const iw = W - m.l - m.r, ih = Ht - m.t - m.b;
+  const sx = (g) => m.l + ((g - 0.5) / n) * iw;
+  const sy = (v) => m.t + ih - ((v - yMin) / (yMax - yMin || 1)) * ih;
+  const step = (pts) => pts.filter((p) => p.best != null)
+    .map((p, i) => (i ? `H${sx(p.g).toFixed(1)}V${sy(p.best).toFixed(1)}` : `M${sx(p.g).toFixed(1)},${sy(p.best).toFixed(1)}`)).join("");
+  const endLbl = (c, cls, name) => c.best == null ? "" :
+    `<text class="${cls === "on" ? "lbl-strong" : "lbl"}" x="${m.l + iw + 8}" y="${sy(c.best) + 4}">${name} ${fmt(c.best, 1)}</text>`;
+  $("ablation").innerHTML = `
+  <svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Best unallocated GPUs by generation, with and without Atlas memory">
+    <g class="axis">
+      ${[yMin, (yMin + yMax) / 2, yMax].map((t) => `<text x="${m.l - 8}" y="${sy(t) + 4}" text-anchor="end">${fmt(t)}</text>`).join("")}
+      <text x="${m.l + iw / 2}" y="${Ht - 2}" text-anchor="middle">Generation</text>
+    </g>
+    ${a.fgd != null ? `<line class="ref" x1="${m.l}" x2="${m.l + iw}" y1="${sy(a.fgd)}" y2="${sy(a.fgd)}"/>
+      <text class="lbl" x="${m.l + iw + 8}" y="${sy(a.fgd) + 4}">FGD ${fmt(a.fgd)}</text>` : ""}
+    <path class="off" d="${step(off.points)}"/>
+    <path class="on" d="${step(on.points)}"/>
+    ${endLbl(on, "on", "On")}${endLbl(off, "off", "Off")}
+  </svg>`;
 }
 
 // ---------- Lineage ----------

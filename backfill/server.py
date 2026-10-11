@@ -163,6 +163,41 @@ async def harness(_: Request):
     })
 
 
+ABLATION_DB = os.environ.get("BACKFILL_ABLATION_DB", "backfill_ablation")
+
+
+def _best_curve(store) -> dict:
+    runs = sorted(store.find("runs", {"kind": "candidate"}, projection={"code_embedding": 0, "curves": 0, "code": 0}),
+                  key=lambda r: r.get("generation") or 0)
+    best, pts = None, []
+    for r in runs:
+        if r.get("ok") and r.get("mean_unalloc") is not None:
+            best = r["mean_unalloc"] if best is None else min(best, r["mean_unalloc"])
+        pts.append({"g": r["generation"], "best": best, "score": r.get("mean_unalloc") if r.get("ok") else None})
+    tokens = sum(l.get("tokens") or 0 for l in store.find("ledger"))
+    return {"points": pts, "best": best, "generations": len(runs),
+            "failed": sum(1 for r in runs if not r.get("ok")),
+            "duplicates": sum(1 for r in runs if r.get("duplicate_of")), "tokens": tokens}
+
+
+async def ablation(_: Request):
+    """Best-so-far curves with Atlas memory on (main database) and off (ablation database)."""
+    out = {"memory_on": _best_curve(get_store())}
+    try:
+        off = get_store(ABLATION_DB)
+        out["memory_off"] = _best_curve(off) if off.find("runs", limit=1) else None
+    except Exception as e:
+        out["memory_off"], out["error"] = None, str(e)
+    base = baseline_scores()
+    if "fgd" in base and all(w in base["fgd"] for w in TRAIN_WORKLOADS):
+        out["fgd"] = sum(base["fgd"][w] for w in TRAIN_WORKLOADS) / len(TRAIN_WORKLOADS)
+    for k in ("memory_on", "memory_off"):
+        c = out.get(k)
+        if c and out.get("fgd") is not None:
+            c["beat_fgd_at"] = next((p["g"] for p in c["points"] if p["best"] is not None and p["best"] < out["fgd"]), None)
+    return JSONResponse(out)
+
+
 async def events(request: Request):
     """Push a 'changed' event when harness data changes: Atlas change streams, or polling locally."""
     store = get_store()
@@ -207,6 +242,7 @@ app = Starlette(routes=[
     Route("/api/run", run_stream),
     Route("/api/harness", harness),
     Route("/api/events", events),
+    Route("/api/ablation", ablation),
     Mount("/static", StaticFiles(directory=WEB), name="static"),
 ])
 
