@@ -25,18 +25,24 @@
 
   async function getJSON(url) {
     const r = await fetch(url, { cache: "no-store" });
-    if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`;
+      try { const j = await r.json(); if (j.error) msg = j.error; } catch (_) {}
+      throw new Error(msg);
+    }
     return r.json();
   }
 
   async function load() {
-    let data, live = true;
+    let data, live = true, apiError = null;
     try {
       data = await getJSON("/api/data");
       if (data.source === "recorded" || data.source === "replay") live = false;
     } catch (e) {
+      apiError = e.message;
       try { data = await getJSON("data.json"); live = false; } catch (e2) {
-        $("status").textContent = "No data yet: start the harness, or add a recording";
+        $("status").className = "status";
+        $("status").textContent = `Live data unavailable: ${apiError}`;
         return;
       }
     }
@@ -45,6 +51,7 @@
     st.className = "status " + (live ? "live" : "recorded");
     st.dataset.label = live ? "Live from MongoDB Atlas" : `Recorded run${data.recorded_at || data.generated_at ? ", " + new Date((data.recorded_at || data.generated_at) * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}`;
     st.textContent = st.dataset.label;
+    st.title = apiError ? `Live data unavailable: ${apiError}` : "";
     render(data);
   }
 
