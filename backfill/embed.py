@@ -9,7 +9,10 @@ import numpy as np
 
 from .config import EMBED_DIM, SETTINGS
 
-VOYAGE_URL = "https://api.voyageai.com/v1/embeddings"
+# Keys created in MongoDB Atlas (AI Model APIs) use ai.mongodb.com; keys from the
+# Voyage dashboard use api.voyageai.com. We try the configured one first, then the other.
+ENDPOINTS = ["https://ai.mongodb.com/v1/embeddings", "https://api.voyageai.com/v1/embeddings"]
+_working: str | None = None
 
 
 def embed(texts: list[str], input_type: str = "document") -> list[list[float]]:
@@ -19,14 +22,24 @@ def embed(texts: list[str], input_type: str = "document") -> list[list[float]]:
         return []
     if not SETTINGS.voyage_api_key:
         return [_offline(t) for t in texts]
-    r = httpx.post(
-        VOYAGE_URL,
-        headers={"Authorization": f"Bearer {SETTINGS.voyage_api_key}"},
-        json={"input": texts, "model": SETTINGS.voyage_model, "input_type": input_type},
-        timeout=60,
-    )
-    if r.status_code != 200:
-        raise RuntimeError(f"Voyage embeddings failed with HTTP {r.status_code}: {r.text[:300]}")
+    global _working
+    order = [_working] if _working else ([SETTINGS.voyage_url] if SETTINGS.voyage_url else []) + \
+        [e for e in ENDPOINTS if e != SETTINGS.voyage_url]
+    last = None
+    for url in order:
+        r = httpx.post(url, headers={"Authorization": f"Bearer {SETTINGS.voyage_api_key}"},
+                       json={"input": texts, "model": SETTINGS.voyage_model, "input_type": input_type},
+                       timeout=60)
+        if r.status_code == 200:
+            _working = url
+            break
+        last = r
+        if r.status_code not in (401, 403):
+            break
+    else:
+        r = None
+    if r is None or r.status_code != 200:
+        raise RuntimeError(f"Voyage embeddings failed with HTTP {last.status_code}: {last.text[:300]}")
     data = sorted(r.json()["data"], key=lambda d: d["index"])
     return [d["embedding"] for d in data]
 

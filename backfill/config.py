@@ -23,7 +23,8 @@ class Settings:
     mongodb_uri: str = field(default_factory=lambda: _env("MONGODB_URI"))
     mongodb_db: str = field(default_factory=lambda: _env("MONGODB_DB", "backfill"))
     voyage_api_key: str = field(default_factory=lambda: _env("VOYAGE_API_KEY"))
-    voyage_model: str = field(default_factory=lambda: _env("VOYAGE_MODEL", "voyage-3.5"))
+    voyage_model: str = field(default_factory=lambda: _env("VOYAGE_MODEL", "voyage-4-large"))
+    voyage_url: str = field(default_factory=lambda: _env("VOYAGE_URL"))
     raindrop_write_key: str = field(default_factory=lambda: _env("RAINDROP_WRITE_KEY"))
     run_user: str = field(default_factory=lambda: _env("BACKFILL_USER", "backfill-harness"))
 
@@ -45,5 +46,5 @@ SETTINGS = Settings()
 # Train on these; hold the rest out for the generalization test.
 TRAIN_WORKLOADS = ["default", "gpushare40", "multigpu20", "gpuspec33"]
 HELDOUT_WORKLOADS = ["gpushare80", "multigpu50", "gpuspec20", "gpushare60"]
-EMBED_DIM = 1024          # voyage-3.5 default output dimension
+EMBED_DIM = 1024          # voyage-4-large / voyage-3.5 default output dimension
 FINGERPRINT_DIM = 12      # workload fingerprint length

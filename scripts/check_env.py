@@ -81,6 +81,16 @@ def main():
     print(f"{OK} OPENAI_MODEL = {SETTINGS.openai_model}")
     if uri_ok:
         ping_atlas()
+    if SETTINGS.voyage_api_key:
+        try:
+            from backfill import embed
+            v = embed.embed_one("test")
+            print(f"{OK} Voyage embeddings work ({len(v)} dims, via {embed._working})")
+        except Exception as e:
+            print(f"{BAD} Voyage: {e}")
+    if SETTINGS.raindrop_write_key:
+        from backfill import observe
+        print(f"{OK if observe.ENABLED else BAD} Raindrop SDK {'initialized' if observe.ENABLED else 'failed to start'}")
 
 
 if __name__ == "__main__":
