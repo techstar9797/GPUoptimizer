@@ -25,6 +25,7 @@ def main():
     ap.add_argument("--hours", type=float, default=0, help="stop after this many hours (0 = no limit)")
     ap.add_argument("--no-memory", action="store_true")
     ap.add_argument("--db", default=None, help="MongoDB database name (overrides MONGODB_DB)")
+    ap.add_argument("--fresh", action="store_true", help="clear runs, lessons and harness versions in this database first")
     a = ap.parse_args()
     if a.db:
         os.environ["MONGODB_DB"] = a.db
@@ -38,6 +39,13 @@ def main():
     if not SETTINGS.openai_api_key:
         sys.exit("OPENAI_API_KEY is not set. Add it to .env in the repo root.")
     store = get_store()
+    if a.fresh:
+        if store.backend == "atlas":
+            for c in ("harness_versions", "runs", "lessons", "ledger"):
+                store.db[c].delete_many({})
+        else:
+            store.clear()
+        print("Cleared runs, lessons and harness versions. Workload fingerprints are kept.")
     h = latest_active(store)
     locked = None
     if a.no_memory:

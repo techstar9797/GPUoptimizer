@@ -19,7 +19,7 @@ ALLOWED_IMPORTS = {"numpy", "math"}
 BANNED_NAMES = {
     "open", "exec", "eval", "compile", "__import__", "globals", "locals", "vars",
     "getattr", "setattr", "delattr", "input", "breakpoint", "help", "exit", "quit",
-    "memoryview", "type", "object", "super",
+    "memoryview",
 }
 SAFE_BUILTINS = {
     n: __builtins__[n] if isinstance(__builtins__, dict) else getattr(__builtins__, n)

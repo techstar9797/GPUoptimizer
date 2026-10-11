@@ -60,6 +60,7 @@ DEFAULT_SPEC = {
     "guardrails": {
         "max_code_lines": 120,
         "duplicate_similarity": 0.985,
+        "duplicate_overlap": 0.97,
         "sim_timeout_s": 240,
     },
     "temperature": 0.8,

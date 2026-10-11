@@ -30,6 +30,7 @@ BOUNDS = {
                        "show_per_workload": bool},
     "tools": {"duplicate_check": bool, "lesson_recall": bool, "frag_helper": bool},
     "guardrails": {"max_code_lines": (30, 250), "duplicate_similarity": (0.9, 0.999),
+                   "duplicate_overlap": (0.85, 1.0),
                    "sim_timeout_s": (60, 400)},
 }
 MEMORY_KEYS = [("tools", "duplicate_check"), ("tools", "lesson_recall"), ("context_policy", "recall_lessons")]
@@ -62,7 +63,8 @@ def validate_spec(parent: dict, proposed: dict, locked: list | None = None) -> t
             elif isinstance(v, (int, float)) and not isinstance(v, bool):
                 lo, hi = rule
                 clamped = min(max(v, lo), hi)
-                spec[section][key] = type(parent[section][key])(clamped)
+                kind = type(parent[section][key]) if key in parent.get(section, {}) else float
+                spec[section][key] = kind(clamped)
                 if clamped != v:
                     notes.append(f"clamped {section}.{key} to {clamped}")
             else:
@@ -144,7 +146,9 @@ What each setting does:
 - context_policy.show_per_workload: show scores per workload, not only the mean
 - tools.duplicate_check: skip simulating policies nearly identical to earlier ones
 - tools.frag_helper: describe ctx.frag (expected fragmentation) to the agent
-- guardrails.max_code_lines, guardrails.duplicate_similarity, guardrails.sim_timeout_s
+- guardrails.duplicate_similarity: vector similarity at which an earlier policy is checked as a possible duplicate
+- guardrails.duplicate_overlap: share of identical code tokens needed to confirm a duplicate (1.0 = only exact copies)
+- guardrails.max_code_lines, guardrails.sim_timeout_s
 - temperature: sampling temperature for the agent (0 to 1.2){lock_txt}
 
 Diagnose what is holding the agent back, from the numbers above. Then propose ONE focused change

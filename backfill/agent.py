@@ -12,8 +12,11 @@ Raindrop records each step as a tool span, and each outcome as a signal.
 """
 from __future__ import annotations
 
+import difflib
+import io
 import json
 import time
+import tokenize
 from pathlib import Path
 
 from . import llm
@@ -38,6 +41,28 @@ def baseline_scores(seed: int = 0) -> dict:
             if r["seed"] == seed:
                 out.setdefault(r["policy"], {})[r["workload"]] = r["unalloc_gpus"]
     return out
+
+
+def normalize_code(src: str) -> str:
+    """Code without comments, docstrings or formatting, for comparing two policies."""
+    out = []
+    try:
+        prev = None
+        for tok in tokenize.generate_tokens(io.StringIO(src).readline):
+            if tok.type in (tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE, tokenize.INDENT,
+                            tokenize.DEDENT, tokenize.ENCODING, tokenize.ENDMARKER):
+                continue
+            if tok.type == tokenize.STRING and prev in (None, ":"):
+                continue  # docstring
+            out.append(tok.string)
+            prev = tok.string
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return " ".join(src.split())
+    return " ".join(out)
+
+
+def code_overlap(a: str, b: str) -> float:
+    return difflib.SequenceMatcher(None, normalize_code(a), normalize_code(b), autojunk=False).ratio()
 
 
 def _fmt_scores(per: dict, workloads: list[str]) -> str:
@@ -66,6 +91,13 @@ def build_prompt(harness: dict, workloads: list[str], store, gen: Generation) ->
         detail = f" ({_fmt_scores(r['per_workload'], workloads)})" if cp.get("show_per_workload") else ""
         parts.append(f"## Best policy so far #{i}: mean {r['mean_unalloc']:.1f}{detail}\n```python\n{r['code']}\n```")
 
+    tried = store.find("runs", {"kind": "candidate"}, sort=[("created_at", -1)], limit=8)
+    if tried:
+        rows = [f"- {(r.get('idea') or 'no description').splitlines()[0][:160]} -> "
+                f"{('%.0f' % r['mean_unalloc']) if r.get('ok') and r.get('mean_unalloc') is not None else 'failed'}"
+                + (" (duplicate)" if r.get("duplicate_of") else "") for r in tried]
+        parts.append("## Ideas already tried (newest first)\n" + "\n".join(rows))
+
     if cp.get("recent_failures"):
         fails = store.find("runs", {"ok": False, "kind": "candidate"}, sort=[("created_at", -1)],
                            limit=cp["recent_failures"])
@@ -87,8 +119,9 @@ def build_prompt(harness: dict, workloads: list[str], store, gen: Generation) ->
                          "\n".join(f"- {l['text']}" for l in recalled))
 
     parts.append("Write an improved policy that leaves fewer GPUs unallocated than every policy "
-                 "above. Explain your idea in one or two sentences, then give the code in one "
-                 "```python block.")
+                 "above. Do not resubmit an idea already tried with different constants: change how "
+                 "the score is built. Explain your idea in one or two sentences, then give the code "
+                 "in one ```python block.")
     return "\n\n".join(parts), recalled
 
 
@@ -168,17 +201,27 @@ def run_generation(harness: dict, generation: int, workloads: list[str] | None =
     if not err:
         run["code_embedding"] = embed_one(code)
         if spec["tools"].get("duplicate_check"):
-            with gen.tool("atlas_vector_search.runs", input={"k": 1}) as t:
-                hits = store.vector_search("runs", run["code_embedding"], k=1, filter={"kind": "candidate"})
+            with gen.tool("atlas_vector_search.runs", input={"k": 3}) as t:
+                hits = store.vector_search("runs", run["code_embedding"], k=3, filter={"kind": "candidate"})
                 t["output"] = [{"run": h["_id"], "similarity": round(h["similarity"], 4)} for h in hits]
-            if hits and hits[0]["similarity"] >= guards.get("duplicate_similarity", 0.985) and hits[0].get("ok"):
-                dup = hits[0]
+            # Vector search finds look-alikes; a token-level comparison confirms a real duplicate.
+            dup = None
+            for h in hits:
+                if h["similarity"] < guards.get("duplicate_similarity", 0.985) or not h.get("ok"):
+                    continue
+                full = store.get("runs", h["_id"])
+                overlap = code_overlap(code, full.get("code", "")) if full else 0.0
+                if overlap >= guards.get("duplicate_overlap", 0.97):
+                    dup = {**h, "overlap": overlap}
+                    break
+            if dup:
                 run.update(ok=True, duplicate_of=dup["_id"], mean_unalloc=dup["mean_unalloc"],
                            per_workload=dup["per_workload"], curves=dup.get("curves", {}),
                            seconds=0.0, error=None)
                 gen.signal("duplicate_policy", False, duplicate_of=dup["_id"],
-                           similarity=round(dup["similarity"], 4))
-                log(f"  duplicate of {dup['_id']} (similarity {dup['similarity']:.3f}); reused its score")
+                           similarity=round(dup["similarity"], 4), overlap=round(dup["overlap"], 3))
+                log(f"  duplicate of {dup['_id']} (vector similarity {dup['similarity']:.3f}, "
+                    f"code overlap {dup['overlap']:.2f}); reused its score")
 
     if err:
         run.update(ok=False, error=err, mean_unalloc=None, per_workload={}, seconds=0.0)
