@@ -49,12 +49,12 @@ DEFAULT_SPEC = {
     "context_policy": {
         "top_policies": 2,          # best earlier policies shown with their code
         "recent_failures": 2,       # recent rejected or crashed attempts shown
-        "recall_lessons": 0,        # lessons pulled from Atlas Vector Search
+        "recall_lessons": 3,        # lessons pulled from Atlas Vector Search
         "show_per_workload": True,  # break scores down by workload
     },
     "tools": {
         "duplicate_check": True,    # Atlas vector search over earlier policy code
-        "lesson_recall": False,     # Atlas vector search over lessons
+        "lesson_recall": True,      # Atlas vector search over lessons
         "frag_helper": True,        # ctx.frag is described to the agent
     },
     "guardrails": {

@@ -102,7 +102,8 @@ def test_meta_epoch():
         assert kid["spec"]["tools"]["lesson_recall"] is True
         assert kid["status"] in ("active", "rejected")
         assert len(store.lineage(kid["_id"])) == 2
-        locked_spec, notes = meta.validate_spec(h["spec"], {"tools": {"lesson_recall": True}}, meta.MEMORY_KEYS)
+        off = {**h["spec"], "tools": {**h["spec"]["tools"], "lesson_recall": False}}
+        locked_spec, notes = meta.validate_spec(off, {"tools": {"lesson_recall": True}}, meta.MEMORY_KEYS)
         assert locked_spec["tools"]["lesson_recall"] is False and notes
         print(f"  epoch result: v{kid['version']} {kid['status']}, active v{after['version']}")
     finally:
