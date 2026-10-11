@@ -52,7 +52,17 @@ class AtlasStore:
         from pymongo import MongoClient
         self.client = MongoClient(uri, appname="backfill-harness", serverSelectionTimeoutMS=15000)
         self.db = self.client[db]
-        self.client.admin.command("ping")
+        from pymongo.errors import OperationFailure, ServerSelectionTimeoutError
+        try:
+            self.client.admin.command("ping")
+        except OperationFailure as e:
+            if e.code == 18:
+                raise SystemExit("Atlas rejected the username or password in MONGODB_URI. "
+                                 "Run: python scripts/check_env.py") from None
+            raise
+        except ServerSelectionTimeoutError:
+            raise SystemExit("Could not reach the Atlas cluster. Add your IP under Security > Network Access, "
+                             "then run: python scripts/check_env.py") from None
 
     # ---------- setup ----------
     def setup(self, wait: bool = True) -> list[str]:
