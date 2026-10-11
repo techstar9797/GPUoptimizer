@@ -5,7 +5,7 @@ const $ = (id) => document.getElementById(id);
 const fmt = (n, d = 0) => (n == null ? "–" : Number(n).toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: d }));
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-const H = { data: null, selected: null, via: "Waiting for updates…" };
+const H = { full: null, data: null, selected: null, via: "Waiting for updates…", cutoff: null, timer: 0 };
 const GOOD = new Set(["beat_best", "beat_fgd", "harness_accepted"]);
 const SIGNAL_LABEL = {
   beat_best: "Beat best so far", beat_fgd: "Beat FGD", regressed: "Regressed",
@@ -15,7 +15,8 @@ const SIGNAL_LABEL = {
 
 async function load() {
   try {
-    H.data = await fetch("/api/harness").then((r) => r.json());
+    H.full = await fetch("/api/harness").then((r) => r.json());
+    H.data = view(H.full);
   } catch (e) {
     $("sponsors").textContent = `Could not load harness data: ${e.message}`;
     return;
@@ -23,9 +24,58 @@ async function load() {
   render();
 }
 
+// During a replay, show only what existed at the replay clock.
+function view(full) {
+  if (H.cutoff == null) return full;
+  const t = H.cutoff;
+  const versions = full.versions.filter((v) => v.created_at <= t).map((v) =>
+    (v.decided_at && v.decided_at > t) ? { ...v, status: "candidate", heldout_score: null } : v);
+  const runs = full.runs.filter((r) => r.created_at <= t);
+  const maxGen = Math.max(0, ...runs.map((r) => r.generation || 0));
+  const lessons = Object.fromEntries(Object.entries(full.lessons).filter(([, l]) => (l.generation ?? 0) <= maxGen));
+  const tokens = full.runs.length ? Math.round(full.tokens * runs.length / full.runs.length) : 0;
+  return { ...full, versions, runs, lessons, tokens };
+}
+
+function timeline(full) {
+  const ts = [...full.runs.map((r) => r.created_at), ...full.versions.map((v) => v.created_at),
+    ...full.versions.map((v) => v.decided_at).filter(Boolean)].sort((a, b) => a - b);
+  return [...new Set(ts)];
+}
+
+function startReplay() {
+  if (!H.full) return;
+  const steps = timeline(H.full);
+  if (!steps.length) return;
+  clearInterval(H.timer);
+  let i = 0;
+  $("replay-btn").setAttribute("aria-pressed", "true");
+  $("replay-btn").textContent = "Stop replay";
+  const tick = () => {
+    H.cutoff = steps[i];
+    H.data = view(H.full);
+    $("replay-status").textContent = `Replaying: step ${i + 1} of ${steps.length}`;
+    render();
+    if (++i >= steps.length) stopReplay(true);
+  };
+  tick();
+  H.timer = setInterval(tick, 1600);
+}
+
+function stopReplay(finished = false) {
+  clearInterval(H.timer);
+  H.cutoff = null;
+  if (H.full) H.data = H.full;
+  $("replay-btn").setAttribute("aria-pressed", "false");
+  $("replay-btn").textContent = "Replay the run";
+  $("replay-status").textContent = finished ? "Replay finished." : "";
+  render();
+}
+
 function render() {
   const d = H.data;
   renderSponsors(d);
+  renderHeadline(d);
   const has = d.versions.length > 0;
   $("h-empty").hidden = has;
   $("h-body").hidden = !has;
@@ -34,7 +84,8 @@ function render() {
     H.selected = (d.versions.find((v) => v.status === "active") || d.versions[d.versions.length - 1])._id;
   }
   renderProgress(d);
-  renderAblation();
+  if (H.cutoff == null) renderAblation(); else $("ablation-wrap").hidden = true;
+  renderRunLog(d);
   renderLineage(d);
   renderDetail(d);
 }
@@ -42,17 +93,19 @@ function render() {
 function renderSponsors(d) {
   const recalls = d.runs.reduce((a, r) => a + (r.recalled_lessons?.length || 0), 0);
   const dups = d.runs.filter((r) => r.duplicate_of).length;
-  const atlas = d.backend === "atlas";
+  const replay = d.backend === "replay";
+  const atlas = d.backend === "atlas" || replay;
+  const rdOn = d.raindrop || (replay && d.runs.some((r) => r.raindrop_event_id));
   const sigs = d.runs.reduce((a, r) => a + (r.signals?.length || 0), 0);
   $("sponsors").innerHTML = `
     <div class="sponsor ${atlas ? "on" : ""}">
-      <b>${atlas ? `MongoDB Atlas, database ${esc(d.database)}` : "Local store (Atlas not connected)"}</b>
+      <b>${replay ? "Recorded from MongoDB Atlas" : atlas ? `MongoDB Atlas, database ${esc(d.database)}` : "Local store (Atlas not connected)"}</b>
       <span>${fmt(d.versions.length)} harness versions, ${fmt(d.runs.length)} runs, ${fmt(Object.keys(d.lessons).length)} lessons</span>
       <span>Vector search: ${fmt(recalls)} lessons recalled, ${fmt(dups)} duplicate policies caught</span>
     </div>
-    <div class="sponsor ${d.raindrop ? "on" : ""}">
-      <b>${d.raindrop ? "Raindrop is recording" : "Raindrop not connected"}</b>
-      ${d.raindrop
+    <div class="sponsor ${rdOn ? "on" : ""}">
+      <b>${replay ? (rdOn ? "Recorded in Raindrop" : "Raindrop was not connected") : rdOn ? "Raindrop is recording" : "Raindrop not connected"}</b>
+      ${rdOn
         ? `<span>${fmt(d.runs.length)} generation interactions, ${fmt(sigs)} outcome signals</span>
            <span>Every event tagged with its harness version</span>`
         : `<span>Add RAINDROP_WRITE_KEY to .env to record each generation</span>`}
@@ -62,6 +115,53 @@ function renderSponsors(d) {
       <span>${fmt(d.tokens)} tokens used so far</span>
       <span id="live-via">${esc(H.via)}</span>
     </div>`;
+}
+
+// ---------- Headline ----------
+function renderHeadline(d) {
+  const el = $("h-headline");
+  const ok = d.runs.filter((r) => r.ok && r.mean_unalloc != null);
+  const fgd = d.reference?.fgd;
+  if (!ok.length || fgd == null) { el.hidden = true; return; }
+  const best = ok.reduce((a, r) => (r.mean_unalloc < a.mean_unalloc ? r : a));
+  const diff = fgd - best.mean_unalloc;
+  el.hidden = false;
+  el.innerHTML = `
+    <span class="hl-value">${fmt(best.mean_unalloc)}</span>
+    <span class="hl-label">GPUs left unallocated by the agent's best policy, mean of ${d.train?.length || 4} production workloads</span>
+    <span class="hl-compare">${diff > 0
+      ? `${fmt(diff)} fewer than FGD (USENIX ATC '23) at ${fmt(fgd)}. Found in generation ${best.generation}, harness v${best.harness_version}.`
+      : `FGD (USENIX ATC '23) is at ${fmt(fgd)}, ${fmt(-diff)} ahead. Best so far is from generation ${best.generation}.`}</span>`;
+}
+
+// ---------- Run log ----------
+function renderRunLog(d) {
+  const ver = Object.fromEntries(d.versions.map((v) => [v._id, v]));
+  const lines = [];
+  for (const v of d.versions) {
+    if (v.parent_id) lines.push({ t: v.created_at, cls: "meta",
+      text: `meta-agent: v${ver[v.parent_id]?.version ?? "?"} -> v${v.version}: ${v.rationale}` });
+    else lines.push({ t: v.created_at, cls: "meta", text: `harness v${v.version} created: ${v.rationale}` });
+    if (v.decided_at && (v.status === "active" || v.status === "rejected" || v.status === "retired")) {
+      const kept = v.status !== "rejected";
+      const parent = ver[v.parent_id];
+      lines.push({ t: v.decided_at, cls: kept ? "good" : "bad",
+        text: `  v${v.version} ${kept ? "kept" : "rejected"}: held-out ${fmt(v.heldout_score, 1)} vs parent v${parent?.version ?? "?"} ${fmt(parent?.heldout_score, 1)}` });
+    }
+  }
+  for (const r of d.runs) {
+    const sig = r.signals?.length ? `  [${r.signals.join(", ")}]` : "";
+    const body = r.ok ? `${fmt(r.mean_unalloc, 1)} unallocated` : `failed: ${(r.error || "").slice(0, 140)}`;
+    const recall = r.recalled_lessons?.length ? `  (recalled ${r.recalled_lessons.length} lessons from Atlas)` : "";
+    lines.push({ t: r.created_at, cls: r.signals?.some((s) => GOOD.has(s)) ? "good" : r.ok ? "" : "bad",
+      text: `  gen ${r.generation} h${r.harness_version}: ${body}${sig}${recall}` });
+  }
+  lines.sort((a, b) => a.t - b.t);
+  const clock = (t) => new Date(t * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" });
+  const el = $("runlog");
+  const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
+  el.innerHTML = lines.map((l) => `<li class="${l.cls}"><span class="t">${clock(l.t)}</span> ${esc(l.text)}</li>`).join("");
+  if (atBottom || H.cutoff != null) el.scrollTop = el.scrollHeight;
 }
 
 // ---------- Progress chart ----------
@@ -257,12 +357,19 @@ function listen() {
     const ev = JSON.parse(m.data);
     const via = $("live-via");
     if (ev.type === "ready") {
-      H.via = ev.via === "atlas-change-stream" ? "Live via Atlas change stream" : "Live via polling";
+      H.via = ev.via === "atlas-change-stream" ? "Live via Atlas change stream"
+        : ev.via === "recording" ? "Recorded run, replayed offline" : "Live via polling";
       if (via) via.textContent = H.via;
     }
-    if (ev.type === "changed") { clearTimeout(t); t = setTimeout(load, 400); }
+    if (ev.type === "changed" && H.cutoff == null) { clearTimeout(t); t = setTimeout(load, 400); }
   };
   es.onerror = () => { H.via = "Live updates paused, reconnecting…"; const via = $("live-via"); if (via) via.textContent = H.via; };
 }
 
-load().then(listen);
+$("replay-btn").addEventListener("click", () => (H.cutoff == null ? startReplay() : stopReplay()));
+load().then(() => {
+  if (H.full?.backend === "replay" && H.full.recorded_at) {
+    $("replay-status").textContent = `Recorded run from ${new Date(H.full.recorded_at * 1000).toLocaleString("en-US")}`;
+  }
+  listen();
+});

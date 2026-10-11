@@ -153,6 +153,7 @@ async def harness(_: Request):
            for p in ("fgd", "gpu_packing", "best_fit") if p in base and all(w in base[p] for w in TRAIN_WORKLOADS)}
     return JSONResponse({
         "backend": store.backend,
+        "recorded_at": getattr(store, "recorded_at", None),
         "database": SETTINGS.mongodb_db if store.backend == "atlas" else None,
         "raindrop": observe.ENABLED,
         "model": SETTINGS.openai_model,
@@ -226,7 +227,14 @@ async def events(request: Request):
             _t.sleep(2)
             yield ": keepalive\n\n"
 
-    gen = atlas_stream() if store.backend == "atlas" else local_poll()
+    def recorded():
+        yield "data: {\"type\":\"ready\",\"via\":\"recording\"}\n\n"
+        import time as _t
+        while True:
+            _t.sleep(15)
+            yield ": keepalive\n\n"
+
+    gen = atlas_stream() if store.backend == "atlas" else recorded() if store.backend == "replay" else local_poll()
     return StreamingResponse(gen, media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
@@ -248,4 +256,14 @@ app = Starlette(routes=[
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", 8000)), log_level="warning")
+    import argparse
+    ap = argparse.ArgumentParser(description="Backfill console")
+    ap.add_argument("--replay", nargs="?", const=str(RESULTS / "snapshot.json"), default=None,
+                    help="serve a recorded snapshot instead of live Atlas data")
+    ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)))
+    args = ap.parse_args()
+    if args.replay:
+        os.environ["BACKFILL_REPLAY"] = args.replay
+        print(f"Replaying recorded run from {args.replay}")
+    print(f"Console at http://localhost:{args.port}")
+    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")

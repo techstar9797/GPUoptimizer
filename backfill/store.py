@@ -238,6 +238,24 @@ class LocalStore(AtlasStore):
             self._save(c)
 
 
+class ReplayStore(LocalStore):
+    """Read-only store over a recorded snapshot (results/snapshot.json), for demos without network."""
+    backend = "replay"
+
+    def __init__(self, snapshot: dict, db: str):
+        self.root = None
+        dbs = snapshot.get("databases", {})
+        src = dbs.get(db, {})
+        self.data = {c: {d["_id"]: d for d in src.get(c, [])} for c in COLLECTIONS}
+        self.recorded_at = snapshot.get("created_at")
+
+    def _load(self, c):
+        return self.data[c]
+
+    def _save(self, c):
+        pass
+
+
 def _match(d: dict, q: dict) -> bool:
     for k, v in q.items():
         if isinstance(v, dict) and "$in" in v:
@@ -260,7 +278,11 @@ def get_store(db: str | None = None):
     import os
     name = db or os.environ.get("MONGODB_DB") or SETTINGS.mongodb_db
     if name not in _STORES:
-        if SETTINGS.mongodb_uri:
+        replay = os.environ.get("BACKFILL_REPLAY")
+        if replay:
+            import json as _json
+            _STORES[name] = ReplayStore(_json.loads(Path(replay).read_text()), name)
+        elif SETTINGS.mongodb_uri:
             _STORES[name] = AtlasStore(SETTINGS.mongodb_uri, name)
         else:
             root = Path(__file__).resolve().parent.parent / ".localstore"

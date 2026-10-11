@@ -246,3 +246,21 @@ details.code pre { font-size: 12px; overflow-x: auto; background: var(--bg); pad
 #ablation .on { fill: none; stroke: var(--used); stroke-width: 2.5; }
 #ablation .off { fill: none; stroke: var(--frag); stroke-width: 2.5; stroke-dasharray: 6 4; }
 #ablation .ref { stroke: var(--base-line); stroke-width: 1.5; stroke-dasharray: 5 4; }
+
+.h-top { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; justify-content: space-between; margin-bottom: 16px; }
+.h-headline { flex: 1 1 520px; }
+.h-headline .hl-value { font-size: 56px; }
+.replay-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.replay-bar span { font-size: 14px; color: var(--ink-2); }
+#replay-btn { font: inherit; font-size: 15px; font-weight: 600; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 9px 16px; cursor: pointer; }
+#replay-btn[aria-pressed="true"] { border-color: var(--used); }
+.runlog-wrap { margin-bottom: 20px; }
+.runlog { list-style: none; margin: 0; padding: 12px 14px; max-height: 300px; overflow-y: auto;
+  background: #16202b; color: #d7e0ea; border-radius: var(--radius-sm);
+  font: 13px/1.6 "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+.runlog li { white-space: pre-wrap; }
+.runlog .t { color: #7f8c9a; }
+.runlog .good { color: #8fd18f; }
+.runlog .bad { color: #f0b43a; }
+.runlog .meta { color: #8cc0e6; }

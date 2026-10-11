@@ -78,6 +78,13 @@
     </section>
 
     <section class="view" id="view-harness" hidden>
+      <div class="h-top">
+        <div class="headline h-headline" id="h-headline" hidden></div>
+        <div class="replay-bar">
+          <span id="replay-status" role="status" aria-live="polite"></span>
+          <button type="button" id="replay-btn">Replay the run</button>
+        </div>
+      </div>
       <div class="sponsor-strip" id="sponsors"></div>
 
       <div class="empty" id="h-empty" hidden>
@@ -109,6 +116,12 @@
           <p class="panel-note" id="ablation-note"></p>
           <div class="chart" id="ablation"></div>
         </figure>
+
+        <section class="panel runlog-wrap">
+          <h2>Run log</h2>
+          <p class="panel-note">What the harness printed, rebuilt from the documents it wrote to Atlas.</p>
+          <ol class="runlog" id="runlog" aria-live="polite"></ol>
+        </section>
 
         <div class="h-grid">
           <section class="panel lineage">

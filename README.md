@@ -63,6 +63,11 @@ Setup creates the collections and the three vector indexes: `python scripts/setu
 
 Because every event carries the harness version, Raindrop shows how the agent's behavior changes as the harness rewrites itself.
 
+## Demo: live or recorded
+
+- **Live:** `python -m backfill.server` while `scripts/run_harness.py` runs. The Harness view updates over an Atlas change stream: headline result, progress against FGD, run log, harness lineage, and the memory on/off comparison.
+- **Recorded:** `python scripts/snapshot.py` saves the run from Atlas to `results/snapshot.json`. `python -m backfill.server --replay` serves it with no network, and **Replay the run** plays it back step by step.
+
 ## Data
 
 `data/` holds the CSVs from Alibaba's [cluster-trace-gpu-v2023](https://github.com/alibaba/clusterdata/tree/master/cluster-trace-gpu-v2023), published by Alibaba Group with the paper:
