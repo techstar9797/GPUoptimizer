@@ -99,6 +99,19 @@
         <ol class="log" id="log"></ol>
       </section>
     </section>
+
+    <section class="row">
+      <section class="card wide">
+        <h2><b>Raindrop usage</b><span>What the observer recorded, from Atlas</span></h2>
+        <div class="table-wrap"><table id="usage" class="grid-table"></table></div>
+        <p class="foot">Interactions, tool spans and signals are sent to Raindrop by the harness. Tokens are OpenAI usage, recorded per interaction. Raindrop's own dashboard is the authoritative count of events received.</p>
+      </section>
+      <section class="card">
+        <h2><b>Training vs held-out workloads</b><span>Held-out workloads are never shown to the agent</span></h2>
+        <div class="table-wrap"><table id="workloads" class="grid-table"></table></div>
+        <p class="foot">Policies are scored on training workloads. A rewritten harness is kept only if it beats its parent on the held-out workloads, with a different seed.</p>
+      </section>
+    </section>
   </main>
 
   <div class="tip" id="tip" hidden></div>

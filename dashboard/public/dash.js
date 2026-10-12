@@ -111,14 +111,94 @@
     $("steps").innerHTML = steps.map(([t, tech, n, what]) =>
       `<li><span class="s-title">${t}</span><span class="s-tech">${tech}</span><span class="s-count">${fmt(n)}</span><span class="s-what">${what}</span></li>`).join("");
     const rd = runs.filter((r) => r.raindrop_event_id).length;
+    const sigs = runs.reduce((a, r) => a + (r.signals || []).length, 0);
     $("raindrop").innerHTML = rd
-      ? `<b>Raindrop</b> records every generation and rewrite: ${fmt(rd)} interactions, ${fmt(runs.reduce((a, r) => a + (r.signals || []).length, 0))} outcome signals, ${fmt(M.tokens)} tokens.`
-      : `${fmt(M.tokens)} tokens used.`;
+      ? `<b>Raindrop</b> traced ${fmt(rd)} generations (one interaction each) with ${fmt(sigs)} outcome signals, plus ${fmt(rewrites)} harness rewrites as edit signals. OpenAI tokens across both: ${fmt(M.tokens)}.`
+      : `${fmt(M.tokens)} OpenAI tokens used.`;
 
     progress(runs, fgd, pack);
     wins(d, runs);
     ablation(d, fgd);
     log(M);
+    usage(d);
+    workloads(d);
+  }
+
+  // ---------- Raindrop usage ----------
+  const SIGNAL_LABELS = [
+    ["beat_best", "beat_best: new best policy"],
+    ["beat_fgd", "beat_fgd: better than FGD"],
+    ["regressed", "regressed: worse than best"],
+    ["duplicate_policy", "duplicate_policy: repeat skipped"],
+    ["sandbox_violation", "sandbox_violation: unsafe code blocked"],
+    ["policy_crashed", "policy_crashed: failed in simulation"],
+    ["guardrail_tripped", "guardrail_tripped: broke a harness limit"],
+  ];
+  function usageOf(M) {
+    const runs = M.runs, u = M.usage || {};
+    const count = (name) => runs.reduce((a, r) => a + (r.signals || []).filter((s) => s === name).length, 0);
+    const child = M.versions.filter((v) => v.parent_id);
+    const gens = runs.filter((r) => r.raindrop_event_id).length;
+    const rewrites = u.rewrites != null ? u.rewrites : child.length;
+    const spans = runs.some((r) => r.tool_spans != null) ? runs.reduce((a, r) => a + (r.tool_spans || 0), 0) : null;
+    const sig = Object.fromEntries(SIGNAL_LABELS.map(([k]) => [k, count(k)]));
+    const outcome = runs.reduce((a, r) => a + (r.signals || []).length, 0);
+    const accepted = child.filter((v) => v.status === "active" || v.status === "retired").length;
+    const rejected = child.filter((v) => v.status === "rejected").length;
+    return {
+      gens, rewrites, interactions: gens + rewrites, spans, sig, outcome, accepted, rejected,
+      tg: u.tokens_generations, tr: u.tokens_rewrites, tt: M.tokens,
+      perGen: u.tokens_generations != null && runs.length ? u.tokens_generations / runs.length : null,
+    };
+  }
+  function usage(d) {
+    const cols = [["Memory on", usageOf(d.main)]];
+    if (d.ablation) cols.push(["Memory off", usageOf(d.ablation)]);
+    const both = cols.length > 1;
+    const v = (f) => cols.map(([, u]) => `<td class="num">${fmt(f(u))}</td>`).join("") +
+      (both ? `<td class="num">${fmt(cols.every(([, u]) => f(u) != null) ? cols.reduce((a, [, u]) => a + f(u), 0) : null)}</td>` : "");
+    const row = (label, f, cls = "") => `<tr class="${cls}"><td class="${cls === "sub" ? "sub" : ""}">${label}</td>${v(f)}</tr>`;
+    const sub = (label, f) => `<tr><td class="sub">${label}</td>${v(f)}</tr>`;
+    const group = (label) => `<tr class="group"><td colspan="${cols.length + 1 + (both ? 1 : 0)}">${label}</td></tr>`;
+    $("usage").innerHTML = `<thead><tr><th></th>${cols.map(([n]) => `<th class="num">${n}</th>`).join("")}${both ? '<th class="num">Total</th>' : ""}</tr></thead><tbody>
+      ${group("Interactions")}
+      ${sub("Generations (policy written, checked, simulated)", (u) => u.gens)}
+      ${sub("Harness rewrites (meta-agent)", (u) => u.rewrites)}
+      ${row("All interactions", (u) => u.interactions, "total")}
+      ${row("Tool spans (LLM, Atlas search, simulator, critic)", (u) => u.spans)}
+      ${group("Outcome signals on generations")}
+      ${SIGNAL_LABELS.map(([k, l]) => sub(l, (u) => u.sig[k])).join("")}
+      ${row("All outcome signals", (u) => u.outcome, "total")}
+      ${group("Signals on harness rewrites")}
+      ${sub("harness_rewrite: edit, spec before and after", (u) => u.rewrites)}
+      ${sub("harness_accepted: won on held-out", (u) => u.accepted)}
+      ${sub("harness_rejected: lost on held-out", (u) => u.rejected)}
+      ${group("OpenAI tokens")}
+      ${sub("Writing and critiquing policies", (u) => u.tg)}
+      ${sub("Rewriting the harness", (u) => u.tr)}
+      ${row("All tokens", (u) => u.tt, "total")}
+      ${sub("Average per generation", (u) => u.perGen)}
+    </tbody>`;
+  }
+
+  // ---------- Training vs held-out ----------
+  function workloads(d) {
+    const best = (w) => {
+      const rows = baselineRows.filter((r) => r.workload === w);
+      if (!rows.length) return null;
+      const by = {};
+      rows.forEach((r) => { (by[r.policy] = by[r.policy] || []).push(r.unalloc_gpus); });
+      const [p, xs] = Object.entries(by).map(([p, xs]) => [p, xs.reduce((a, b) => a + b, 0) / xs.length]).sort((a, b) => a[1] - b[1])[0];
+      return `${esc(SHORT[p] || p)} <span class="muted">${fmt(xs)}</span>`;
+    };
+    const line = (w, kind) => {
+      const pr = PROFILES[w] || [w, ""];
+      return `<tr><td><span class="tag ${kind === "Training" ? "train" : "held"}">${kind}</span></td><td><b>${esc(w)}</b><br><span class="muted">${esc(pr[0])}</span></td><td class="num">${best(w) || "–"}</td></tr>`;
+    };
+    $("workloads").innerHTML = `<thead><tr><th>Split</th><th>Workload</th><th class="num">Best baseline, GPUs idle</th></tr></thead><tbody>
+      ${(d.train || []).map((w) => line(w, "Training")).join("")}
+      ${(d.heldout || []).map((w) => line(w, "Held-out")).join("")}
+    </tbody>`;
   }
 
   // ---------- Progress chart ----------

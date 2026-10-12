@@ -24,6 +24,7 @@ def _run(r: dict) -> dict:
     d["recalled_lessons"] = len(r.get("recalled_lessons") or [])
     d["idea"] = (r.get("idea") or "").split("\n")[0][:160]
     d["error"] = (r.get("error") or "")[:160] or None
+    d["tool_spans"] = len(r.get("tools") or [])
     return d
 
 
@@ -37,6 +38,11 @@ def _db(store) -> dict:
                             for v in versions), key=lambda v: v["version"]),
         "lessons": len(store.find("lessons", projection={"embedding": 0})),
         "tokens": sum(l.get("tokens") or 0 for l in ledger),
+        "usage": {
+            "tokens_generations": sum(l.get("tokens") or 0 for l in ledger if l.get("kind") != "meta"),
+            "tokens_rewrites": sum(l.get("tokens") or 0 for l in ledger if l.get("kind") == "meta"),
+            "rewrites": sum(1 for l in ledger if l.get("kind") == "meta"),
+        },
     }
 
 

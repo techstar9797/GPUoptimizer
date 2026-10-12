@@ -22,7 +22,7 @@ async function readDb(db) {
     db.collection("runs").find({ kind: "candidate" }, { projection: { code: 0, code_embedding: 0, curves: 0 } }).toArray(),
     db.collection("harness_versions").find({}, { projection: { spec: 0, stats: 0 } }).toArray(),
     db.collection("lessons").countDocuments(),
-    db.collection("ledger").find({}, { projection: { tokens: 1 } }).toArray(),
+    db.collection("ledger").find({}, { projection: { tokens: 1, kind: 1 } }).toArray(),
   ]);
   return {
     runs: runs.map((r) => ({
@@ -30,7 +30,7 @@ async function readDb(db) {
       created_at: r.created_at, ok: r.ok, mean_unalloc: r.mean_unalloc, per_workload: r.per_workload,
       heldout: r.heldout || null, signals: r.signals || [], recalled_lessons: (r.recalled_lessons || []).length,
       duplicate_of: r.duplicate_of || null, idea: firstLine(r.idea, 160), error: r.error ? r.error.slice(0, 160) : null,
-      raindrop_event_id: r.raindrop_event_id || null,
+      raindrop_event_id: r.raindrop_event_id || null, tool_spans: (r.tools || []).length,
     })).sort((a, b) => (a.created_at || 0) - (b.created_at || 0)),
     versions: versions.map((v) => ({
       _id: v._id, version: v.version, parent_id: v.parent_id, status: v.status, rationale: (v.rationale || "").slice(0, 400),
@@ -38,6 +38,11 @@ async function readDb(db) {
     })).sort((a, b) => a.version - b.version),
     lessons,
     tokens: ledger.reduce((s, l) => s + (l.tokens || 0), 0),
+    usage: {
+      tokens_generations: ledger.filter((l) => l.kind !== "meta").reduce((s, l) => s + (l.tokens || 0), 0),
+      tokens_rewrites: ledger.filter((l) => l.kind === "meta").reduce((s, l) => s + (l.tokens || 0), 0),
+      rewrites: ledger.filter((l) => l.kind === "meta").length,
+    },
   };
 }
 
